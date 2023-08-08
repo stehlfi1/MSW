@@ -1,6 +1,11 @@
 # Made by Filip Stehlik
 # Basic Lib for blackjack
 
+#TO DO:
+# Refactor, its ugly
+# Add DAS control
+# Add insurance controll for bot
+# add more bot stuff
 
 import random
 
@@ -81,7 +86,7 @@ class BlackjackGame:
 
     def hit(self, hand):
         card_to_add = self._draw_card() 
-        print("Adding card:", card_to_add)
+        #print("Adding card:", card_to_add)
         hand.add_card(card_to_add)
         if hand.value > 21:
             self.game_over = True
@@ -106,11 +111,11 @@ class BlackjackGame:
             if action == 'h':
                 self.hit(hand)
             elif action == 's':
-                return [hand]
+                return [hand], bet
             elif action == 'd':
                 self.double_down(hand)
                 bet *= 2
-                return [hand]
+                return [hand], bet
             elif action == 'sp':
                 if self.can_split(hand):
                     new_hand1 = Hand()
@@ -118,7 +123,7 @@ class BlackjackGame:
                     new_hand2 = Hand()
                     new_hand2.add_card(hand.cards.pop())
                     l = [self.play_hand(new_hand1, bet),self.play_hand(new_hand2, bet)]
-                    return l, betjjj
+                    return l, bet
                 else:
                     print("unable")
             else:
@@ -197,7 +202,7 @@ def play_game():
             print(f"You lost your insurance bet of {-insurance_result}")
 
        
-        hands_to_evaluate = game.play_hand(game.player_hand, bet)
+        hands_to_evaluate, bet = game.play_hand(game.player_hand, bet)
 
         # Dealer's turn
         while game.dealer_hand.value < 17:
@@ -211,8 +216,10 @@ def play_game():
                 if game.dealer_hand.value != 21 or len(game.dealer_hand.cards) != 2:
                     print("Blackjack! You win 3:2 on your bet!")
                     player_balance += bet * 1.5
-
-            if hand.value > 21:
+            if game.dealer_hand.value == 21 and len(game.dealer_hand.cards) ==2:
+                print("Dealer Blackjack! You lose!")
+                player_balance -= bet
+            elif hand.value > 21:
                 print("Player busts! You lose.")
                 player_balance -= bet
             elif game.dealer_hand.value > 21:
@@ -234,90 +241,153 @@ def play_game():
         play_again = input("Do you want to play again? (y/n): ").lower()
         if play_again != 'y':
             break
-def bot_strategy(hand):
-    # Always Hit on 16 or less, and Stand on 17 or more
-    return 'h' if hand.value <= 16 else 's'
+def bot_strategy(hand, strategy, dhand, s):
+    
+    a = False
+
+    if dhand["rank"]  in ['K', 'Q', 'J']:
+        dvalue = 10
+    elif dhand["rank"] == 'A':
+        dvalue = 11
+    else:
+        dvalue = int(dhand["rank"])
+
+    if hand.aces !=0:  
+        a = True
+
+    basic_chart = [
+            #[2,3,4,5,6,7,8,9,10,a]
+            ['h','h','h','d','d','h','h','h','h','h'],#8
+            ['h','d','d','d','d','h','h','h','h','h'],
+            ['d','d','d','d','d','d','d','d','h','h'],
+            ['d','d','d','d','d','d','d','d','d','d'],#11
+            ['h','h','s','s','s','h','h','h','h','h'],
+            ['s','s','s','s','s','h','h','h','h','h'],
+            ['s','s','s','s','s','h','h','h','h','h'],
+            ['s','s','s','s','s','h','h','h','h','h'],
+            ['s','s','s','s','s','h','h','h','h','h']#16
+    ]
+    a_chart = [
+            #[2,3,4,5,6,7,8,9,10,a]
+            ['h','h','h','d','d','h','h','h','h','h'],#a-2 13
+            ['h','h','d','d','d','h','h','h','h','h'],
+            ['h','h','d','d','d','h','h','h','h','h'],
+            ['d','h','d','d','d','h','h','h','h','h'],#a5
+            ['h','d','d','d','d','h','h','h','h','h'],
+            ['s','d','d','d','d','s','s','h','h','h'],#a7
+            ['s','s','s','s','s','s','s','s','s','s'],
+            ['s','s','s','s','s','s','s','s','s','s'],#a 9
+            ['s','s','s','s','s','s','s','s','s','s'],#a 10
+            ['h','h','s','s','h','h','h','h','h','h']#a a
+    ]
+    s_chart = [
+            #[2,3,4,5,6,7,8,9,10,a]
+            ['sp','sp','sp','sp','sp','sp','h','h','h','h'],#22
+            ['sp','sp','sp','sp','sp','sp','h','h','h','h'],
+            ['h','h','h','sp','sp','h','h','h','h','h'],
+            ['d','d','d','d','d','d','d','d','h','h'],#55
+            ['sp','sp','sp','sp','sp','h','h','h','h','h'],#66
+            ['sp','sp','sp','sp','sp','sp','h','h','s','h'],#77
+            ['sp','sp','sp','sp','sp','sp','sp','sp','sp','sp'],
+            ['s','s','s','s','s','s','s','s','s','s'],#99
+            ['s','s','s','s','s','s','s','s','s','s'],#1010
+            ['sp','sp','sp','sp','sp','sp','sp','sp','sp','sp']#aa
+    ]
+    if strategy == "basic_split":
+        if s:
+            #print(s, hand)
+            return s_chart[int((hand.value/2)) - 2][dvalue-2]
+        elif a:
+            #print(s,a,hand)
+            return a_chart[int(hand.value)-13][dvalue-2]
+        elif hand.value < 8:
+            return 'h'
+        elif hand.value > 16:
+            return 's'
+        else:
+            return basic_chart[int(hand.value)-8][dvalue-2]
+        
+    elif strategy == "rng":
+        return random.choice(["h", "s"])
+    elif strategy == "onlyhit":
+        return 'h'
+    elif strategy == "onlystand":
+        return 's'
+    else:
+        # Always Hit on 16 or less, and Stand on 17 or more
+        return 'h' if hand.value <= 16 else 's'
 
 class BotBlackjackGame(BlackjackGame):
-    def play_hand(self, hand, bet):
+    def play_hand(self, hand, bet, strategy, dhand):
         while hand.value < 21:
-            action = bot_strategy(hand)
+            action = bot_strategy(hand, strategy, dhand, self.can_split(hand))
             if action == 'h':
-                self.hit(hand)
+                self.hit(hand), bet
             elif action == 's':
-                return [hand]
+                return [hand], bet
+            elif action == 'd':
+                self.double_down(hand)
+                bet *= 2
+                return [hand], bet
+            elif action == 'sp':
+                if self.can_split(hand):
+                    new_hand1 = Hand()
+                    new_hand1.add_card(hand.cards.pop())
+                    new_hand2 = Hand()
+                    new_hand2.add_card(hand.cards.pop())
+                    [hand1], bet = self.play_hand(new_hand1, bet, "lol", dhand)
+                    [hand2], bet = self.play_hand(new_hand2, bet, "lol", dhand)
+                    return [hand1, hand2], bet
 
-        return [hand]
+        return [hand], bet
 
-def simulate_bot_play(rounds, initial_balance):
+def simulate_bot_play(rounds, initial_balance, betsize, strategy):
     player_balance = initial_balance
     game = BotBlackjackGame(penetration=0.25)
+    balances = [player_balance]
     for _ in range(rounds):
-        bet = 10 # Fixed bet amount for simplicity
-
+        bet = int(betsize) 
+        
         #deal
         game.reset()
         game.deal()
-        print("Player's hand:", game.player_hand)
-        print("Dealer's upcard:", game.dealer_hand.cards[0])
+        #print("Player's hand:", game.player_hand)
+        #print("Dealer's upcard:", game.dealer_hand.cards[0])
 
-        """
-        # Offer insurance if the dealer's upcard is an Ace
-        if game.offer_insurance():
-            insurance = input("Do you want to take insurance (y/n)? ").lower()
-            if insurance == 'y':
-                insurance_bet = bet / 2
-                game.take_insurance(insurance_bet)
-                print(f"You have taken insurance for {insurance_bet}")
-        
-        # Insurance logic
-        insurance_result = game.check_insurance()
-        player_balance += insurance_result
-        if insurance_result > 0:
-            print(f"Insurance paid! You won {insurance_result}")
-        elif insurance_result < 0:
-            print(f"You lost your insurance bet of {-insurance_result}")
-        """
        
-        hands_to_evaluate = game.play_hand(game.player_hand, bet)
+        hands_to_evaluate, bet = game.play_hand(game.player_hand, bet, strategy, game.dealer_hand.cards[0])
 
         # Dealer's turn
         while game.dealer_hand.value < 17:
             game.hit(game.dealer_hand)
 
         for hand in hands_to_evaluate:
-            print("Player's hand:", hand)
-            print("Dealer's hand:", game.dealer_hand)
-            # Check for player blackjack win
+            #print(hand)
             if hand.value == 21 and len(hand.cards) == 2:
                 if game.dealer_hand.value != 21 or len(game.dealer_hand.cards) != 2:
-                    print("Blackjack! You win 3:2 on your bet!")
                     player_balance += bet * 1.5
-
-            if hand.value > 21:
-                #print("Player busts! You lose.")
+            elif game.dealer_hand.value == 21 and len(game.dealer_hand.cards) ==2:
+                #print("Dealer Blackjack! You lose!")
+                player_balance -= bet
+            elif hand.value > 21:
                 player_balance -= bet
             elif game.dealer_hand.value > 21:
-                #print("Dealer busts! You win!")
                 player_balance += bet
             elif hand.value > game.dealer_hand.value:
-                #print("You win!")
                 player_balance += bet
             elif hand.value < game.dealer_hand.value:
-                #print("You lose.")
                 player_balance -= bet
             else:
-                #print("It's a tie -> push.")
                 pass
-        
-    return player_balance
+        balances.append(player_balance)
+    return balances
 
-def botplay():
-    rounds = 10000
-    initial_balance = 1000
-    final_balance = simulate_bot_play(rounds, initial_balance)
-    print(f"After {rounds} rounds, the bot's balance is {final_balance}")
+def botplay(rounds = 100, initial_balance = 1000, betsize = 10, strategy = "basic", include_insurance=False):
+
+    final_balance = simulate_bot_play(rounds, initial_balance, betsize, strategy)
+    return final_balance
+    #print(f"After {rounds} rounds, the bot's balance is {final_balance}")
 
 if __name__ == "__main__":
     #play_game()
-    botplay()
+    print(botplay(strategy = ""))
